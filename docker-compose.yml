@@ -1,0 +1,59 @@
+version: "3.9"
+
+services:
+  db:
+    image: postgres:15
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: qrdb
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    ports:
+      - "5432:5432"
+
+  redis:
+    image: redis:7
+    ports:
+      - "6379:6379"
+
+  api:
+    build:
+      context: ./app/backend
+    environment:
+      DATABASE_URL: postgresql+psycopg2://postgres:postgres@db:5432/qrdb
+      JWT_SECRET: supersecretjwt
+      REDIS_URL: redis://redis:6379/0
+      FILE_STORAGE: /uploads
+      CORS_ORIGINS: '["*"]'
+    volumes:
+      - ./app/backend/src:/app/src
+      - uploads:/uploads
+    ports:
+      - "8000:8000"
+    depends_on:
+      - db
+      - redis
+
+  web:
+    build:
+      context: ./app/frontend
+    ports:
+      - "80:80"
+    depends_on:
+      - api
+
+  pgadmin:
+    image: dpage/pgadmin4
+    environment:
+      PGADMIN_DEFAULT_EMAIL: admin@example.com
+      PGADMIN_DEFAULT_PASSWORD: admin
+    ports:
+      - "5050:80"
+    depends_on:
+      - db
+
+volumes:
+  pgdata:
+  uploads:
+
