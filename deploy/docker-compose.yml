@@ -1,0 +1,45 @@
+version: "3.9"
+services:
+  api:
+    build:
+      context: ..
+      dockerfile: deploy/backend.Dockerfile
+    env_file:
+      - ../.env
+    volumes:
+      - ../backend:/app
+      - uploads:/data/uploads
+    depends_on:
+      - db
+      - redis
+    ports:
+      - "8000:8000"
+
+  web:
+    build:
+      context: ..
+      dockerfile: deploy/frontend.Dockerfile
+    depends_on:
+      - api
+    ports:
+      - "3000:80"
+
+  db:
+    image: postgres:15
+    environment:
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_USER: postgres
+      POSTGRES_DB: qr
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    ports:
+      - "5432:5432"
+
+  redis:
+    image: redis:7
+    ports:
+      - "6379:6379"
+
+volumes:
+  pgdata:
+  uploads:

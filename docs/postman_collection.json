@@ -1,0 +1,39 @@
+{
+  "info": {
+    "name": "QR Lifecycle API",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "item": [
+    {
+      "name": "Login",
+      "request": {
+        "method": "POST",
+        "header": [
+          {"key": "Content-Type", "value": "application/json"}
+        ],
+        "url": {"raw": "{{baseUrl}}/api/auth/login", "host": ["{{baseUrl}}"], "path": ["api", "auth", "login"]},
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"email\": \"admin@example.com\",\n  \"password\": \"admin123\"\n}"
+        }
+      }
+    },
+    {
+      "name": "Generate QR",
+      "request": {
+        "method": "POST",
+        "header": [
+          {"key": "Authorization", "value": "Bearer {{token}}"}
+        ],
+        "url": {"raw": "{{baseUrl}}/api/qrcodes/generate", "host": ["{{baseUrl}}"], "path": ["api", "qrcodes", "generate"]},
+        "body": {
+          "mode": "formdata",
+          "formdata": [
+            {"key": "data", "value": "{\\"demo\\":true}"},
+            {"key": "reuse_allowed", "value": "true"}
+          ]
+        }
+      }
+    }
+  ]
+}
