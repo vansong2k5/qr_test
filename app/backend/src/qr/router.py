@@ -1,17 +1,17 @@
 from __future__ import annotations
 
 import json
-from typing import Any
 
 from fastapi import APIRouter, Depends, File, Form, HTTPException, UploadFile
 from sqlalchemy.orm import Session
 
 from ..crud.qrcode import qr as qr_crud
-from ..deps import get_current_user, get_db
+from ..deps import get_current_user, get_db, require_role
 from ..models.product import Product
 from ..models.qrcode import QrCode
 from ..schemas.qrcode import QrOut, QrUpdate
 from .service import create_qrcode
+from ..lifecycle.events import log_qr_lifecycle_event
 
 router = APIRouter()
 
@@ -28,7 +28,7 @@ async def generate_qr(
     background: str = Form("#FFFFFF"),
     mask_image: UploadFile | None = File(None),
     db: Session = Depends(get_db),
-    user=Depends(get_current_user),
+    user=Depends(require_role("admin")),
 ):
     product = db.query(Product).filter(Product.id == product_id).first()
     if not product:
@@ -57,7 +57,7 @@ async def list_qrcodes(
     db: Session = Depends(get_db),
     user=Depends(get_current_user),
 ):
-    query = db.query(QrCode)
+    query = db.query(QrCode).order_by(QrCode.created_at.desc())
     if status:
         query = query.filter(QrCode.status == status)
     if product_id:
@@ -78,11 +78,27 @@ async def update_qrcode(qr_id: int, payload: QrUpdate, db: Session = Depends(get
     qrcode = qr_crud.get(db, id=qr_id)
     if not qrcode:
         raise HTTPException(status_code=404, detail="QR not found")
-    return qr_crud.update(db, db_obj=qrcode, obj_in=payload)
+    update_data = payload.dict(exclude_unset=True)
+    for field, value in update_data.items():
+        setattr(qrcode, field, value)
+    db.add(qrcode)
+    db.flush()
+    log_qr_lifecycle_event(
+        db,
+        qrcode=qrcode,
+        event_type="updated",
+        actor_id=user.id,
+        metadata=update_data,
+        lifecycle_state=update_data.get("lifecycle_state"),
+        commit=False,
+    )
+    db.commit()
+    db.refresh(qrcode)
+    return qrcode
 
 
 @router.delete("/{qr_id}", status_code=204)
-async def delete_qrcode(qr_id: int, db: Session = Depends(get_db), user=Depends(get_current_user)):
+async def delete_qrcode(qr_id: int, db: Session = Depends(get_db), user=Depends(require_role("admin"))):
     qrcode = qr_crud.get(db, id=qr_id)
     if not qrcode:
         raise HTTPException(status_code=404, detail="QR not found")
@@ -91,8 +107,24 @@ async def delete_qrcode(qr_id: int, db: Session = Depends(get_db), user=Depends(
 
 
 @router.post("/{qr_id}/revoke", response_model=QrOut)
-async def revoke_qrcode(qr_id: int, db: Session = Depends(get_db), user=Depends(get_current_user)):
+async def revoke_qrcode(qr_id: int, db: Session = Depends(get_db), user=Depends(require_role("admin"))):
     qrcode = qr_crud.get(db, id=qr_id)
     if not qrcode:
         raise HTTPException(status_code=404, detail="QR not found")
-    return qr_crud.update(db, db_obj=qrcode, obj_in={"status": "revoked"})
+    if qrcode.status == "revoked":
+        return qrcode
+    qrcode.status = "revoked"
+    db.add(qrcode)
+    db.flush()
+    log_qr_lifecycle_event(
+        db,
+        qrcode=qrcode,
+        event_type="revoked",
+        actor_id=user.id,
+        metadata={"reason": "manual"},
+        lifecycle_state="retired",
+        commit=False,
+    )
+    db.commit()
+    db.refresh(qrcode)
+    return qrcode
