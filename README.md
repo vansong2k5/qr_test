@@ -1,90 +1,71 @@
 # QR Lifecycle Platform
 
-Production-ready template for managing customers, products, artistic QR codes and their lifecycle analytics.
+Ứng dụng quản trị vòng đời mã QR cho khách hàng & sản phẩm với khả năng tạo QR nghệ thuật theo mask ảnh. This repository contains both backend (FastAPI) and frontend (React) plus Docker deployment assets.
 
-## Quick start
-
-```bash
-cp .env.example .env
-docker compose up -d --build
-```
-
-Run migrations and seed data:
+## Nhanh chóng bắt đầu / Quick start
 
 ```bash
-docker compose exec api alembic upgrade head
-docker compose exec api python -c "from src.models.database import SessionLocal; from src.utils.seed import seed; db=SessionLocal(); seed(db); db.close()"
+cp deploy/.env.example .env
+make setup
+make dev
 ```
 
-Default admin login: `admin@example.com` / `admin123`.
+Hoặc chạy production-like:
 
-## Architecture
-
-- **Backend:** FastAPI + SQLAlchemy + Alembic (Python 3.11)
-- **Frontend:** React + Vite + TypeScript + Tailwind + shadcn-inspired components
-- **Database:** PostgreSQL (managed via docker-compose)
-- **Cache:** Redis (rate limiting, counters)
-- **Containers:** `docker-compose.yml` orchestrates API, web, db, redis, pgAdmin
-- **Storage:** Local `/uploads` directory via pluggable storage abstraction
-
-## ERD
-
-```mermaid
-erDiagram
-    User ||--o{ QrCode : creates
-    User ||--o{ AuditLog : acts
-    Customer ||--o{ Product : owns
-    Product ||--o{ QrCode : has
-    QrCode ||--o{ ScanEvent : records
-    Product {
-        int id
-        int customer_id
-        string name
-        string sku
-        enum lifecycle_status
-    }
-    QrCode {
-        int id
-        int product_id
-        string code
-        enum reusable_mode
-        int reuse_limit
-        int reuse_count
-        enum status
-    }
+```bash
+docker compose -f deploy/docker-compose.yml up --build -d
 ```
 
-## API Highlights
+Sau khi container chạy:
 
-- JWT auth with access/refresh tokens and RBAC (admin, staff)
-- CRUD for customers, products, QR codes
-- Artistic QR generation with optional mask image and color controls
-- Public scan endpoint `/api/events/s/{code}` logs analytics, enforces reuse rules and lifecycle phases
-- Analytics endpoints summarise activity and per-QR timelines
+```bash
+docker compose -f deploy/docker-compose.yml exec api alembic upgrade head
+docker compose -f deploy/docker-compose.yml exec api python -m app.utils.seed
+```
 
-## Frontend Screens
+Đăng nhập quản trị: `admin@example.com` / `admin123`.
 
-![Dashboard mock](docs/dashboard-placeholder.png)
+## Kiến trúc
 
-_Use the included Tailwind + shadcn-inspired components to expand the UI._
+- **Backend:** FastAPI + SQLAlchemy + Alembic, Redis rate limiting, JSON logging.
+- **Frontend:** React + Vite + Tailwind với dark mode.
+- **Database:** PostgreSQL (schema hỗ trợ JSONB, UUID) + migrations.
+- **Cache/Queue:** Redis cho rate-limit và counters.
+- **Tests:** pytest (backend), Vitest + React Testing Library (frontend).
 
-## Tests & Quality
+## Thư mục chính
 
-- Python tests: `pytest`
-- Linting: `ruff`, `black`
-- Frontend linting: configure via ESLint/Prettier if desired
+```
+/backend   # FastAPI nguồn, tests, Alembic
+/frontend  # React admin UI & public scan page
+/deploy    # Dockerfiles, docker-compose, nginx
+/examples  # Ảnh mask/logo mẫu
+/docs      # OpenAPI & Postman collection
+```
 
-### GitHub Actions
+## Các tính năng nổi bật
 
-See `.github/workflows/ci.yml` for automated lint + test run.
+- Tạo QR nghệ thuật theo mask ảnh, tự động tăng phiên bản & giãn mask khi mật độ không đủ, hỗ trợ chèn logo với ECC H.
+- Lưu trữ vòng đời quét, analytics chi tiết (timeline, heatmap source, CSV export).
+- Tái sử dụng QR với chu kỳ, ghi lịch sử và cập nhật owner sản phẩm.
+- Trang quét công khai với CTA xác nhận/warranty transfer.
+- JWT auth, rate limit cho endpoint scan, logging JSON ẩn PII nhạy cảm.
+- Docker Compose chạy full stack (API + Web + Postgres + Redis + Nginx proxy).
 
-## Future Work
+## Scripts hữu ích
 
-- Swap `LocalStorage` with an S3-backed implementation (use `boto3` and configure bucket, prefix and presigned URLs).
-- Front CDN (CloudFront/Fastly) in front of the S3 bucket for low-latency QR asset delivery.
-- Implement Redis-backed rate limiting middleware for `/api/events/s/{code}`.
-- Expand unit tests for mask rendering and CSV import.
-- Add full-featured analytics dashboards and maps on the frontend.
+```bash
+make backend-test     # pytest
+make frontend-test    # vitest
+make migrate          # alembic upgrade head
+make seed             # python -m app.utils.seed
+```
+
+## Tài liệu API
+
+- OpenAPI: `http://localhost:8000/openapi.json`
+- Swagger UI: `http://localhost:8000/docs`
+- Postman collection: `docs/postman_collection.json`
 
 ## License
 
