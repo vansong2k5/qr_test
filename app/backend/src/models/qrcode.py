@@ -25,6 +25,19 @@ class QrCode(Base):
     status = Column(Enum("active", "inactive", "revoked", name="qr_status"), default="active")
     created_by = Column(Integer, ForeignKey("users.id"), nullable=False)
     created_at = Column(DateTime, default=datetime.utcnow)
+    lifecycle_state = Column(
+        Enum("issued", "active", "suspended", "retired", "recycled", name="qr_lifecycle_state"),
+        default="issued",
+        nullable=False,
+    )
+    activated_at = Column(DateTime, nullable=True)
+    retired_at = Column(DateTime, nullable=True)
 
     product = relationship("Product", backref="qrcodes")
     creator = relationship("User")
+    lifecycle_events = relationship(
+        "QrLifecycleEvent",
+        back_populates="qrcode",
+        cascade="all, delete-orphan",
+        order_by="QrLifecycleEvent.occurred_at.desc()",
+    )

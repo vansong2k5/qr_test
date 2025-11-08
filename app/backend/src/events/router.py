@@ -7,6 +7,7 @@ from sqlalchemy.orm import Session
 from ..crud.qrcode import qr as qr_crud
 from ..crud.scanevent import log_event
 from ..deps import get_current_user, get_db
+from ..lifecycle.events import log_qr_lifecycle_event
 from ..models.product import Product
 from ..schemas.event import ScanEventOut
 
@@ -44,7 +45,7 @@ async def scan_redirect(code: str, request: Request, db: Session = Depends(get_d
             allowed = False
             message = "Not available in current lifecycle phase"
 
-    log_event(
+    scan_event = log_event(
         db,
         qrcode_id=qrcode.id,
         ip=request.client.host if request.client else None,
@@ -54,8 +55,20 @@ async def scan_redirect(code: str, request: Request, db: Session = Depends(get_d
         extra={"allowed": allowed},
     )
 
+    log_qr_lifecycle_event(
+        db,
+        qrcode=qrcode,
+        event_type="scan_recorded",
+        metadata={"allowed": allowed, "scan_event_id": scan_event.id},
+        commit=False,
+    )
+
     if allowed:
-        qr_crud.increment_reuse(db, qrcode=qrcode)
+        qr_crud.increment_reuse(db, qrcode=qrcode, commit=False)
+    db.commit()
+    db.refresh(qrcode)
+
+    if allowed:
         redirect_url = qrcode.payload.get("redirect_url") if isinstance(qrcode.payload, dict) else None
         if redirect_url:
             return HTMLResponse(

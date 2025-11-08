@@ -8,6 +8,7 @@ from typing import Any
 
 from ..models.qrcode import QrCode
 from ..qr.render import render_qr
+from ..lifecycle.events import log_qr_lifecycle_event
 
 
 def create_qrcode(
@@ -43,6 +44,20 @@ def create_qrcode(
         created_by=created_by,
     )
     db.add(qrcode)
+    db.flush()
+    log_qr_lifecycle_event(
+        db,
+        qrcode=qrcode,
+        event_type="created",
+        actor_id=created_by,
+        metadata={
+            "reusable_mode": reusable_mode,
+            "reuse_limit": reuse_limit,
+            "lifecycle_policy": lifecycle_policy or {},
+        },
+        lifecycle_state="issued",
+        commit=False,
+    )
     db.commit()
     db.refresh(qrcode)
     return qrcode

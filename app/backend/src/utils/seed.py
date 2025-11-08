@@ -8,6 +8,7 @@ from ..models.product import Product
 from ..models.qrcode import QrCode
 from ..models.scanevent import ScanEvent
 from ..models.user import User
+from ..lifecycle.events import log_qr_lifecycle_event
 
 
 def seed(db: Session) -> None:
@@ -83,6 +84,17 @@ def seed(db: Session) -> None:
     ]
     db.add_all(qrs)
     db.flush()
+
+    for qr in qrs:
+        log_qr_lifecycle_event(
+            db,
+            qrcode=qr,
+            event_type="created",
+            actor_id=admin.id,
+            metadata={"seed": True, "reusable_mode": qr.reusable_mode},
+            lifecycle_state="issued",
+            commit=False,
+        )
 
     events = [
         ScanEvent(qrcode_id=qrs[0].id, ip="1.1.1.1"),

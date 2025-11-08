@@ -32,6 +32,6 @@ def log_event(
         extra=extra or {},
     )
     db.add(event)
-    db.commit()
+    db.flush()
     db.refresh(event)
     return event
